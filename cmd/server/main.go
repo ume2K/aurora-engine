@@ -47,7 +47,9 @@ func main() {
 	authService := auth.NewService(authRepo, jwtManager)
 	authHandler := auth.NewHandler(authService)
 	videoRepo := video.NewPostgresRepository(deps.DB)
-	videoService := video.NewService(videoRepo)
+	videoStorage := video.NewS3Storage(deps.S3)
+	videoEvents := video.NoopPublisher{}
+	videoService := video.NewService(videoRepo, videoStorage, videoEvents, cfg.S3BucketUploads)
 	videoHandler := video.NewHandler(videoService)
 
 	r := framework.NewRouter()
@@ -102,6 +104,7 @@ func main() {
 	protected.GET("/videos/:id", func(c *framework.Context) { videoHandler.Get(c) })
 	protected.PUT("/videos/:id", func(c *framework.Context) { videoHandler.Update(c) })
 	protected.DELETE("/videos/:id", func(c *framework.Context) { videoHandler.Delete(c) })
+	protected.POST("/upload", func(c *framework.Context) { videoHandler.Upload(c) })
 
 	addr := ":" + cfg.Port
 
@@ -109,8 +112,8 @@ func main() {
 		Addr:              addr,
 		Handler:           r,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		ReadTimeout:       5 * time.Minute,
+		WriteTimeout:      5 * time.Minute,
 		IdleTimeout:       120 * time.Second,
 	}
 

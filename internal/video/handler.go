@@ -3,6 +3,7 @@ package video
 import (
 	"errors"
 	"gocore/pkg/framework"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -155,6 +156,61 @@ func (h *Handler) Delete(c *framework.Context) {
 		return
 	}
 	c.JSONSafe(http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) Upload(c *framework.Context) {
+	ownerID, ok := framework.AuthUserIDFromContext(c.R.Context())
+	if !ok {
+		c.ErrorJSON(http.StatusUnauthorized, "missing auth context")
+		return
+	}
+
+	mr, err := c.R.MultipartReader()
+	if err != nil {
+		c.ErrorJSON(http.StatusBadRequest, "request must be multipart/form-data")
+		return
+	}
+
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			c.ErrorJSON(http.StatusBadRequest, "missing required 'file' field")
+			return
+		}
+		if err != nil {
+			c.ErrorJSON(http.StatusBadRequest, "error reading multipart stream")
+			return
+		}
+
+		if part.FormName() != "file" {
+			part.Close()
+			continue
+		}
+
+		filename := part.FileName()
+		if filename == "" {
+			part.Close()
+			c.ErrorJSON(http.StatusBadRequest, "file part must include a filename")
+			return
+		}
+
+		contentType := part.Header.Get("Content-Type")
+
+		v, uploadErr := h.service.Upload(c.R.Context(), ownerID, part, filename, contentType)
+		part.Close()
+
+		if uploadErr != nil {
+			if errors.Is(uploadErr, ErrInvalidInput) {
+				c.ErrorJSON(http.StatusBadRequest, "invalid upload parameters")
+				return
+			}
+			c.ErrorJSON(http.StatusInternalServerError, "upload failed")
+			return
+		}
+
+		c.JSONSafe(http.StatusCreated, map[string]any{"video": v})
+		return
+	}
 }
 
 func parsePositiveInt(raw string, fallback int) (int, error) {
