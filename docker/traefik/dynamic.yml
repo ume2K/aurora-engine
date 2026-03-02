@@ -1,0 +1,14 @@
+http:
+  routers:
+    aurora:
+      entryPoints:
+        - web
+      rule: PathPrefix(`/`)
+      service: aurora-service
+
+  services:
+    aurora-service:
+      loadBalancer:
+        servers:
+          - url: http://api-1:8080
+          - url: http://api-2:8080

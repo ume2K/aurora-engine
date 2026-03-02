@@ -1,0 +1,118 @@
+name: aurora-engine
+
+x-api-common: &api-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment:
+    APP_ENV: production
+    PORT: 8080
+    APP_NAME: aurora-engine
+    DATABASE_URL: postgresql://aurora:aurora@postgres:5432/aurora?sslmode=disable
+    REDIS_ADDR: redis:6379
+    REDIS_STREAM: video-events
+    REDIS_GROUP: media-workers
+    S3_ENDPOINT: rustfs:9000
+    S3_REGION: eu-central-1
+    S3_ACCESS_KEY: rustfsadmin
+    S3_SECRET_KEY: rustfsadmin
+    S3_BUCKET_UPLOADS: aurora-uploads
+    S3_BUCKET_PROCESSED: aurora-processed
+    S3_USE_SSL: "false"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rustfs:
+      condition: service_started
+  networks:
+    - aurora-edge
+    - aurora-internal
+
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "80:80"
+      - "8081:8080"
+    networks:
+      - aurora-edge
+    volumes:
+      - ./docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+
+  api-1:
+    <<: *api-common
+    container_name: aurora-api-1
+
+  api-2:
+    <<: *api-common
+    container_name: aurora-api-2
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aurora
+      POSTGRES_USER: aurora
+      POSTGRES_PASSWORD: aurora
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aurora -d aurora"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - aurora-internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - aurora-internal
+
+  rustfs:
+    image: rustfs/rustfs@sha256:a4c66eff563a1600c9f6e822c8c15ec0a2dcdea2862529d010648aadc80974f9
+    restart: unless-stopped
+    command: /data
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs_data:/data
+    networks:
+      - aurora-internal
+
+volumes:
+  postgres_data:
+  redis_data:
+  rustfs_data:
+
+networks:
+  aurora-edge:
+    driver: bridge
+  aurora-internal:
+    driver: bridge
