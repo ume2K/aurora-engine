@@ -13,6 +13,8 @@ type Config struct {
 	AppEnv          string
 	Port            string
 	ShutdownTimeout time.Duration
+	JWTSecret       string
+	JWTExpiresIn    time.Duration
 
 	DatabaseURL string
 
@@ -51,6 +53,13 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.ShutdownTimeout = time.Duration(shutdownSeconds) * time.Second
+
+	jwtMinutes, err := getEnvInt("JWT_EXPIRES_MINUTES", 60)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.JWTExpiresIn = time.Duration(jwtMinutes) * time.Minute
+	cfg.JWTSecret = getEnv("JWT_SECRET", "change-me-in-production")
 
 	useSSL, err := getEnvBool("S3_USE_SSL", false)
 	if err != nil {

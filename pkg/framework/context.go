@@ -2,6 +2,7 @@ package framework
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,6 +109,10 @@ func (e *HTTPError) Error() string {
 
 func (c *Context) Query(key string) string {
 	return c.R.URL.Query().Get(key)
+}
+
+func (c *Context) RequestContext() context.Context {
+	return c.R.Context()
 }
 
 func (c *Context) HTML(code int, name string, data any) {

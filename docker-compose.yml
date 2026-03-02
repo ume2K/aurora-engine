@@ -9,6 +9,8 @@ x-api-common: &api-common
     APP_ENV: production
     PORT: 8080
     APP_NAME: aurora-engine
+    JWT_SECRET: change-me-in-production
+    JWT_EXPIRES_MINUTES: 60
     DATABASE_URL: postgresql://aurora:aurora@postgres:5432/aurora?sslmode=disable
     REDIS_ADDR: redis:6379
     REDIS_STREAM: video-events

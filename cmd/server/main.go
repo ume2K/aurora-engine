@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gocore/internal/app"
+	"gocore/internal/auth"
 	"gocore/internal/config"
 	"gocore/pkg/framework"
 	"log"
@@ -39,6 +40,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("initialize dependencies: %v", err)
 	}
+
+	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiresIn)
+	authRepo := auth.NewPostgresRepository(deps.DB)
+	authService := auth.NewService(authRepo, jwtManager)
+	authHandler := auth.NewHandler(authService)
 
 	r := framework.NewRouter()
 	r.Use(framework.Logger)
@@ -79,6 +85,14 @@ func main() {
 
 		c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	api := r.Group("/api")
+	api.POST("/auth/register", func(c *framework.Context) { authHandler.Register(c) })
+	api.POST("/auth/login", func(c *framework.Context) { authHandler.Login(c) })
+
+	protected := r.Group("/api")
+	protected.Use(framework.RequireBearerAuth(auth.FrameworkTokenVerifier(jwtManager)))
+	protected.GET("/users/me", func(c *framework.Context) { authHandler.Me(c) })
 
 	addr := ":" + cfg.Port
 
