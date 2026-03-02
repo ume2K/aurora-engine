@@ -2,6 +2,8 @@ package framework
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -26,13 +28,13 @@ func RequireBearerAuth(verifier TokenVerifier) Middleware {
 			authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				http.Error(w, "missing bearer token", http.StatusUnauthorized)
+				writeErrorJSON(w, http.StatusUnauthorized, "missing bearer token")
 				return
 			}
 
 			info, err := verifier(strings.TrimSpace(parts[1]))
 			if err != nil {
-				http.Error(w, "invalid token", http.StatusUnauthorized)
+				writeErrorJSON(w, http.StatusUnauthorized, "invalid token")
 				return
 			}
 
@@ -51,4 +53,18 @@ func AuthUserIDFromContext(ctx context.Context) (string, bool) {
 func AuthRoleFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(authRoleKey).(string)
 	return v, ok
+}
+
+func writeErrorJSON(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	payload := map[string]any{
+		"error": map[string]string{
+			"code":    strings.ToLower(strings.ReplaceAll(http.StatusText(status), " ", "_")),
+			"message": message,
+		},
+	}
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("write auth error json failed (status=%d): %v", status, err)
+	}
 }

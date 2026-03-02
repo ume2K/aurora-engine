@@ -42,6 +42,21 @@ func (c *Context) JSON(code int, v any) error {
 	return json.NewEncoder(c.W).Encode(v)
 }
 
+func (c *Context) JSONSafe(code int, v any) {
+	if err := c.JSON(code, v); err != nil {
+		log.Printf("write json response failed (status=%d): %v", code, err)
+	}
+}
+
+func (c *Context) ErrorJSON(code int, message string) {
+	c.JSONSafe(code, map[string]any{
+		"error": map[string]string{
+			"code":    errorCodeFromStatus(code),
+			"message": message,
+		},
+	})
+}
+
 func (c *Context) Param(key string) string {
 	val, ok := c.R.Context().Value(key).(string)
 	if !ok {
@@ -113,6 +128,12 @@ func (c *Context) Query(key string) string {
 
 func (c *Context) RequestContext() context.Context {
 	return c.R.Context()
+}
+
+func errorCodeFromStatus(status int) string {
+	code := strings.ToLower(http.StatusText(status))
+	code = strings.ReplaceAll(code, " ", "_")
+	return code
 }
 
 func (c *Context) HTML(code int, name string, data any) {

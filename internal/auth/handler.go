@@ -17,9 +17,7 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) Register(c *framework.Context) {
 	var input RegisterInput
 	if err := c.BindJSONStrict(&input); err != nil {
-		if err := c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()}); err != nil {
-			return
-		}
+		c.ErrorJSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -27,27 +25,25 @@ func (h *Handler) Register(c *framework.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidInput):
-			_ = c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid email or password (min 8 chars)"})
+			c.ErrorJSON(http.StatusBadRequest, "invalid email or password (min 8 chars)")
 		case errors.Is(err, ErrEmailAlreadyExists):
-			_ = c.JSON(http.StatusConflict, map[string]string{"error": "email already exists"})
+			c.ErrorJSON(http.StatusConflict, "email already exists")
 		default:
-			_ = c.JSON(http.StatusInternalServerError, map[string]string{"error": "register failed"})
+			c.ErrorJSON(http.StatusInternalServerError, "register failed")
 		}
 		return
 	}
 
-	if err := c.JSON(http.StatusCreated, map[string]any{
+	c.JSONSafe(http.StatusCreated, map[string]any{
 		"user":  user,
 		"token": token,
-	}); err != nil {
-		return
-	}
+	})
 }
 
 func (h *Handler) Login(c *framework.Context) {
 	var input LoginInput
 	if err := c.BindJSONStrict(&input); err != nil {
-		_ = c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		c.ErrorJSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -55,27 +51,25 @@ func (h *Handler) Login(c *framework.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidInput):
-			_ = c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid email or password"})
+			c.ErrorJSON(http.StatusBadRequest, "invalid email or password")
 		case errors.Is(err, ErrInvalidCredentials):
-			_ = c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+			c.ErrorJSON(http.StatusUnauthorized, "invalid credentials")
 		default:
-			_ = c.JSON(http.StatusInternalServerError, map[string]string{"error": "login failed"})
+			c.ErrorJSON(http.StatusInternalServerError, "login failed")
 		}
 		return
 	}
 
-	if err := c.JSON(http.StatusOK, map[string]any{
+	c.JSONSafe(http.StatusOK, map[string]any{
 		"user":  user,
 		"token": token,
-	}); err != nil {
-		return
-	}
+	})
 }
 
 func (h *Handler) Me(c *framework.Context) {
 	userID, ok := framework.AuthUserIDFromContext(c.R.Context())
 	if !ok {
-		_ = c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing auth context"})
+		c.ErrorJSON(http.StatusUnauthorized, "missing auth context")
 		return
 	}
 
@@ -83,11 +77,11 @@ func (h *Handler) Me(c *framework.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUserNotFound):
-			_ = c.JSON(http.StatusNotFound, map[string]string{"error": "user not found"})
+			c.ErrorJSON(http.StatusNotFound, "user not found")
 		default:
-			_ = c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to fetch user"})
+			c.ErrorJSON(http.StatusInternalServerError, "failed to fetch user")
 		}
 		return
 	}
-	_ = c.JSON(http.StatusOK, map[string]any{"user": user})
+	c.JSONSafe(http.StatusOK, map[string]any{"user": user})
 }

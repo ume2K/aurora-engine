@@ -6,6 +6,7 @@ import (
 	"gocore/internal/app"
 	"gocore/internal/auth"
 	"gocore/internal/config"
+	"gocore/internal/video"
 	"gocore/pkg/framework"
 	"log"
 	"net/http"
@@ -45,6 +46,9 @@ func main() {
 	authRepo := auth.NewPostgresRepository(deps.DB)
 	authService := auth.NewService(authRepo, jwtManager)
 	authHandler := auth.NewHandler(authService)
+	videoRepo := video.NewPostgresRepository(deps.DB)
+	videoService := video.NewService(videoRepo)
+	videoHandler := video.NewHandler(videoService)
 
 	r := framework.NewRouter()
 	r.Use(framework.Logger)
@@ -93,6 +97,11 @@ func main() {
 	protected := r.Group("/api")
 	protected.Use(framework.RequireBearerAuth(auth.FrameworkTokenVerifier(jwtManager)))
 	protected.GET("/users/me", func(c *framework.Context) { authHandler.Me(c) })
+	protected.POST("/videos", func(c *framework.Context) { videoHandler.Create(c) })
+	protected.GET("/videos", func(c *framework.Context) { videoHandler.List(c) })
+	protected.GET("/videos/:id", func(c *framework.Context) { videoHandler.Get(c) })
+	protected.PUT("/videos/:id", func(c *framework.Context) { videoHandler.Update(c) })
+	protected.DELETE("/videos/:id", func(c *framework.Context) { videoHandler.Delete(c) })
 
 	addr := ":" + cfg.Port
 
