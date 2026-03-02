@@ -26,3 +26,10 @@ type UpdateInput struct {
 	ContentType *string `json:"content_type"`
 	Status      *string `json:"status"`
 }
+
+type ListQuery struct {
+	Page   int
+	Limit  int
+	Status string
+	Q      string
+}

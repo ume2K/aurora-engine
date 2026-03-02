@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,7 +12,7 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, ownerID string, input CreateInput) (Video, error)
-	ListByOwner(ctx context.Context, ownerID string) ([]Video, error)
+	ListByOwner(ctx context.Context, ownerID string, query ListQuery) ([]Video, error)
 	GetByID(ctx context.Context, ownerID, videoID string) (Video, error)
 	Update(ctx context.Context, ownerID, videoID string, input UpdateInput) (Video, error)
 	Delete(ctx context.Context, ownerID, videoID string) error
@@ -42,15 +43,38 @@ func (r *PostgresRepository) Create(ctx context.Context, ownerID string, input C
 	return v, nil
 }
 
-func (r *PostgresRepository) ListByOwner(ctx context.Context, ownerID string) ([]Video, error) {
-	const q = `
+func (r *PostgresRepository) ListByOwner(ctx context.Context, ownerID string, query ListQuery) ([]Video, error) {
+	const baseQuery = `
 		SELECT id::text, owner_id::text, object_key, filename, content_type, size_bytes, status, created_at, updated_at
 		FROM videos
 		WHERE owner_id = $1::uuid
-		ORDER BY created_at DESC;
 	`
 
-	rows, err := r.db.Query(ctx, q, ownerID)
+	args := []any{ownerID}
+	conditions := []string{}
+	param := 2
+
+	if query.Status != "" {
+		conditions = append(conditions, fmt.Sprintf("status = $%d", param))
+		args = append(args, query.Status)
+		param++
+	}
+	if query.Q != "" {
+		conditions = append(conditions, fmt.Sprintf("(filename ILIKE $%d OR object_key ILIKE $%d)", param, param))
+		args = append(args, "%"+query.Q+"%")
+		param++
+	}
+
+	builder := strings.Builder{}
+	builder.WriteString(baseQuery)
+	if len(conditions) > 0 {
+		builder.WriteString(" AND ")
+		builder.WriteString(strings.Join(conditions, " AND "))
+	}
+	builder.WriteString(fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", param, param+1))
+	args = append(args, query.Limit, (query.Page-1)*query.Limit)
+
+	rows, err := r.db.Query(ctx, builder.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("list videos: %w", err)
 	}

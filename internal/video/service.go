@@ -38,7 +38,27 @@ func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput)
 }
 
 func (s *Service) ListByOwner(ctx context.Context, ownerID string) ([]Video, error) {
-	return s.repo.ListByOwner(ctx, ownerID)
+	return s.ListByOwnerWithQuery(ctx, ownerID, ListQuery{Page: 1, Limit: 20})
+}
+
+func (s *Service) ListByOwnerWithQuery(ctx context.Context, ownerID string, query ListQuery) ([]Video, error) {
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 20
+	}
+	if query.Limit > 100 {
+		query.Limit = 100
+	}
+	query.Status = strings.TrimSpace(query.Status)
+	if query.Status != "" {
+		if _, ok := allowedStatuses[query.Status]; !ok {
+			return nil, ErrInvalidInput
+		}
+	}
+	query.Q = strings.TrimSpace(query.Q)
+	return s.repo.ListByOwner(ctx, ownerID, query)
 }
 
 func (s *Service) GetByID(ctx context.Context, ownerID, videoID string) (Video, error) {

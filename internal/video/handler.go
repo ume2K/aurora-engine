@@ -4,6 +4,7 @@ import (
 	"errors"
 	"gocore/pkg/framework"
 	"net/http"
+	"strconv"
 )
 
 type Handler struct {
@@ -46,12 +47,39 @@ func (h *Handler) List(c *framework.Context) {
 		return
 	}
 
-	videos, err := h.service.ListByOwner(c.R.Context(), ownerID)
+	page, err := parsePositiveInt(c.Query("page"), 1)
 	if err != nil {
+		c.ErrorJSON(http.StatusBadRequest, "invalid page")
+		return
+	}
+	limit, err := parsePositiveInt(c.Query("limit"), 20)
+	if err != nil {
+		c.ErrorJSON(http.StatusBadRequest, "invalid limit")
+		return
+	}
+	query := ListQuery{
+		Page:   page,
+		Limit:  limit,
+		Status: c.Query("status"),
+		Q:      c.Query("q"),
+	}
+
+	videos, err := h.service.ListByOwnerWithQuery(c.R.Context(), ownerID, query)
+	if err != nil {
+		if errors.Is(err, ErrInvalidInput) {
+			c.ErrorJSON(http.StatusBadRequest, "invalid list filters")
+			return
+		}
 		c.ErrorJSON(http.StatusInternalServerError, "list videos failed")
 		return
 	}
-	c.JSONSafe(http.StatusOK, map[string]any{"videos": videos})
+	c.JSONSafe(http.StatusOK, map[string]any{
+		"videos": videos,
+		"pagination": map[string]int{
+			"page":  page,
+			"limit": limit,
+		},
+	})
 }
 
 func (h *Handler) Get(c *framework.Context) {
@@ -127,4 +155,15 @@ func (h *Handler) Delete(c *framework.Context) {
 		return
 	}
 	c.JSONSafe(http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func parsePositiveInt(raw string, fallback int) (int, error) {
+	if raw == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 0, errors.New("invalid positive int")
+	}
+	return n, nil
 }

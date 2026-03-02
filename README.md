@@ -29,5 +29,35 @@ Das Kernstück der Präsentation wird das Load Testing sein:
 * [x] Projektidee und Architektur-Entscheidung
 * [x] Infrastruktur Setup (`docker-compose.yml`)
 * [x] GoCore Integration
-* [ ] JWT Setup
-* [ ] ...
+* [x] JWT Setup + geschützte API-Routen
+* [x] Video-Metadaten-CRUD (owner-scoped)
+
+## API (Phase 3)
+
+**Auth**
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/users/me` (Bearer Token erforderlich)
+
+**Video Metadata**
+- `POST /api/videos`
+- `GET /api/videos`
+- `GET /api/videos/:id`
+- `PUT /api/videos/:id`
+- `DELETE /api/videos/:id`
+
+`GET /api/videos` unterstützt Query-Parameter:
+- `page` (default `1`)
+- `limit` (default `20`, max `100`)
+- `status` (`uploaded|processing|ready|failed`)
+- `q` (case-insensitive Suche auf `filename` und `object_key`)
+
+Fehlerantworten sind konsistent im JSON-Format:
+```json
+{
+  "error": {
+    "code": "bad_request",
+    "message": "invalid list filters"
+  }
+}
+```
