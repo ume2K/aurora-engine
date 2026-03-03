@@ -7,6 +7,7 @@
 Die **Aurora Engine** ist eine hochverfügbare, verteilte Media-Processing-Pipeline. Das Projekt fokussiert sich auf die asynchrone und ausfallsichere Verarbeitung von ressourcenintensiven Aufgaben (Video-Uploads und Processing).
 
 Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Node-Ausfall mitten in der Verarbeitung nahtlos vom verbleibenden Node übernommen wird.
+Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Node-Ausfall mitten in der Verarbeitung nahtlos vom verbleibenden Node übernommen wird.
 
 ## Architektur & Tech Stack
 
@@ -30,6 +31,7 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 | Phase | Thema | Status |
 |-------|-------|--------|
 | 1 | Infrastruktur (Docker Compose, Traefik, Postgres, Redis, RustFS) | Done |
+| 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
 | 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
 | 3 | JWT Auth, Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | Done |
 | 4 | Streaming Upload nach RustFS (multipart/form-data), Metadaten in Postgres | Done |
