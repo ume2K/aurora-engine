@@ -18,9 +18,10 @@ type Config struct {
 
 	DatabaseURL string
 
-	RedisAddr   string
-	RedisStream string
-	RedisGroup  string
+	RedisAddr     string
+	RedisStream   string
+	RedisGroup    string
+	ConsumerID    string
 
 	S3Endpoint        string
 	S3Region          string
@@ -40,6 +41,7 @@ func Load() (Config, error) {
 		RedisAddr:         getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisStream:       getEnv("REDIS_STREAM", "video-events"),
 		RedisGroup:        getEnv("REDIS_GROUP", "media-workers"),
+		ConsumerID:        getEnv("CONSUMER_ID", defaultHostname()),
 		S3Endpoint:        getEnv("S3_ENDPOINT", "localhost:9000"),
 		S3Region:          getEnv("S3_REGION", "eu-central-1"),
 		S3AccessKey:       getEnv("S3_ACCESS_KEY", "rustfsadmin"),
@@ -68,6 +70,14 @@ func Load() (Config, error) {
 	cfg.S3UseSSL = useSSL
 
 	return cfg, nil
+}
+
+func defaultHostname() string {
+	h, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return h
 }
 
 func getEnv(key, fallback string) string {

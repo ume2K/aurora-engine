@@ -7,6 +7,7 @@ import (
 	"gocore/internal/auth"
 	"gocore/internal/config"
 	"gocore/internal/video"
+	"gocore/internal/worker"
 	"gocore/pkg/framework"
 	"log"
 	"net/http"
@@ -48,9 +49,17 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 	videoRepo := video.NewPostgresRepository(deps.DB)
 	videoStorage := video.NewS3Storage(deps.S3)
-	videoEvents := video.NoopPublisher{}
+	videoEvents := video.NewRedisPublisher(deps.Redis, cfg.RedisStream)
 	videoService := video.NewService(videoRepo, videoStorage, videoEvents, cfg.S3BucketUploads)
 	videoHandler := video.NewHandler(videoService)
+
+	eventHandler := worker.NewEventHandler()
+	workerCfg := worker.DefaultConfig(cfg.RedisStream, cfg.RedisGroup, cfg.ConsumerID)
+	w := worker.New(deps.Redis, workerCfg, eventHandler.HandleMessage)
+
+	if err := w.EnsureConsumerGroup(startupCtx); err != nil {
+		log.Fatalf("ensure consumer group: %v", err)
+	}
 
 	r := framework.NewRouter()
 	r.Use(framework.Logger)
@@ -117,6 +126,10 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	go w.Run(workerCtx)
+	go w.RunClaimer(workerCtx)
+
 	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("Server running on http://localhost%s (bind: 0.0.0.0%s)", addr, addr)
@@ -138,6 +151,9 @@ func main() {
 	case <-shutdownSignalCtx.Done():
 		log.Println("Shutdown signal received")
 	}
+
+	workerCancel()
+	log.Println("Worker goroutines stopping...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
