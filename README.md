@@ -1,4 +1,4 @@
-# Aurora Engine
+# 🌌 Aurora Engine
 
 **Challenge Task FS 2026 – Distributed Systems**
 
@@ -6,11 +6,11 @@
 
 Die **Aurora Engine** ist eine hochverfügbare, verteilte Media-Processing-Pipeline. Das Projekt fokussiert sich auf die asynchrone und ausfallsichere Verarbeitung von ressourcenintensiven Aufgaben (Video-Uploads und Processing).
 
-Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Node-Ausfall mitten in der Verarbeitung nahtlos vom verbleibenden Node uebernommen wird.
+Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Node-Ausfall mitten in der Verarbeitung nahtlos vom verbleibenden Node übernommen wird.
 
 ## Architektur & Tech Stack
 
-* **Backend:** Go – 2 Instanzen hinter Load Balancer fuer Failover-Beweis
+* **Backend:** Go – 2 Instanzen hinter Load Balancer für Failover-Beweis
 * **Load Balancer:** Traefik v3 (Round-Robin, File Provider)
 * **Database:** PostgreSQL 16 (User, Video-Metadaten, Processing Jobs)
 * **Message Broker:** Redis Streams mit Consumer Groups (XREADGROUP, XACK, XCLAIM)
@@ -22,20 +22,22 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 
 1. Videos werden hochgeladen und als Events in den Redis Stream gepublished (`XADD`).
 2. Beide Instanzen lesen als Consumer Group – jede Nachricht geht an genau einen Worker.
-3. **Failover:** Eine Instanz wird waehrend der Verarbeitung hart beendet (`docker stop`).
-4. **Recovery:** Die ueberlebende Instanz erkennt ueber `XPENDING` die unbestaetigten Nachrichten, claimt sie via `XCLAIM` und verarbeitet sie – kein Datenverlust.
+3. **Failover:** Eine Instanz wird während der Verarbeitung hart beendet (`docker stop`).
+4. **Recovery:** Die überlebende Instanz erkennt über `XPENDING` die unbestätigten Nachrichten, claimt sie via `XCLAIM` und verarbeitet sie – kein Datenverlust.
 
 ## Phasen
 
 | Phase | Thema | Status |
 |-------|-------|--------|
 | 1 | Infrastruktur (Docker Compose, Traefik, Postgres, Redis, RustFS) | Done |
-| 2 | Go-App Grundgeruest (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
+| 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
 | 3 | JWT Auth, Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | Done |
 | 4 | Streaming Upload nach RustFS (multipart/form-data), Metadaten in Postgres | Done |
 | 5 | Redis Streams Publisher, Consumer-Group Worker, PEL-Claiming/Failover | Done |
 | 6 | Processing-Logik (Jobs erstellen, Video-Status-Pipeline, simulierte Arbeit) | Offen |
-| 7 | Failover-Demo unter Last | Offen |
+| 7 | Video-Transcoding-Logik (ffmpeg-Transcoding, Skalierung, Output nach RustFS) | Offen |
+| 8 | Failover-Demo unter Last | Offen |
+| 9 | Web UI | Offen |
 
 ## API
 
