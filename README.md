@@ -7,15 +7,47 @@
 Die **Aurora Engine** ist eine hochverfügbare, verteilte Media-Processing-Pipeline. Das Projekt fokussiert sich auf die asynchrone und ausfallsichere Verarbeitung von ressourcenintensiven Aufgaben (Video-Uploads und Processing).
 
 Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Node-Ausfall mitten in der Verarbeitung nahtlos vom verbleibenden Node übernommen wird.
-Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Node-Ausfall mitten in der Verarbeitung nahtlos vom verbleibenden Node übernommen wird.
 
-## Architektur & Tech Stack
+## Architektur
 
-* **Backend:** Go – 2 Instanzen hinter Load Balancer für Failover-Beweis
-* **Load Balancer:** Traefik v3 (Round-Robin, File Provider)
-* **Database:** PostgreSQL 16 (User, Video-Metadaten, Processing Jobs)
-* **Message Broker:** Redis Streams mit Consumer Groups (XREADGROUP, XACK, XCLAIM)
-* **Storage:** RustFS (S3-kompatibler Objektspeicher via minio-go Client)
+```
+                            ┌──────────┐
+                            │  Client  │
+                            └────┬─────┘
+                                 │ :80
+                           ┌─────▼──────┐
+                           │  Traefik   │
+                           │ Round-Robin │
+                           └──┬──────┬──┘
+              ┌───────────────┘      └───────────────┐
+              ▼                                      ▼
+       ┌─────────────┐                        ┌─────────────┐
+       │    api-1    │                        │    api-2    │
+       │             │                        │             │
+       │ HTTP Server │                        │ HTTP Server │
+       │ Worker Loop │◄───── XCLAIM ────────► │ Worker Loop │
+       │ PEL Claimer │      (Failover)        │ PEL Claimer │
+       └──────┬──────┘                        └──────┬──────┘
+              │                                      │
+    ┌─────────┼──────────────────────────────────────┼─────────┐
+    │         │            aurora-internal            │         │
+    │         ▼                  ▼                    ▼         │
+    │   ┌──────────┐      ┌──────────┐        ┌──────────┐    │
+    │   │ Postgres │      │  Redis   │        │  RustFS  │    │
+    │   │  Users   │      │ Streams  │        │   (S3)   │    │
+    │   │  Videos  │      │  CG/PEL  │        │ Uploads  │    │
+    │   │   Jobs   │      │          │        │ Processed│    │
+    │   └──────────┘      └──────────┘        └──────────┘    │
+    └─────────────────────────────────────────────────────────┘
+```
+
+## Tech Stack
+
+* **Backend:** Go – 2 identische Instanzen für Hochverfügbarkeit
+* **Gateway:** Traefik v3 – verteilt Requests gleichmässig und erkennt ausgefallene Container
+* **Database:** PostgreSQL 16 – User, Video-Metadaten und Processing Jobs
+* **Message Broker:** Redis Streams – Consumer Groups (CG) mit Pending Entries List (PEL) für Failover
+* **Storage:** RustFS – S3-kompatibler Objektspeicher, angesprochen via minio-go Client
 * **Frontend:** Plain HTML
 * **Auth:** JWT Bearer Tokens
 
@@ -31,7 +63,6 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 | Phase | Thema | Status |
 |-------|-------|--------|
 | 1 | Infrastruktur (Docker Compose, Traefik, Postgres, Redis, RustFS) | Done |
-| 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
 | 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
 | 3 | JWT Auth, Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | Done |
 | 4 | Streaming Upload nach RustFS (multipart/form-data), Metadaten in Postgres | Done |
