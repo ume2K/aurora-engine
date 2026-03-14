@@ -9,3 +9,6 @@ public/js/
 *.tar
 .vscode/
 .idea/
+
+## Other
+HANDOFF.md

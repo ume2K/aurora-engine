@@ -34,6 +34,21 @@ docker-run:
 	@echo "Running Container on port $(PORT)..."
 	docker run --rm -p $(PORT):$(PORT) -e APP_ENV=production --env-file .env $(APP_NAME)
 
+test-video:
+	@if not exist scripts\test.mp4 ( \
+		echo Generating test video... && \
+		docker run --rm -v "$(CURDIR)/scripts:/out" mwader/static-ffmpeg:7.1 -y -f lavfi -i "color=blue:size=640x360:rate=25:duration=5" -c:v libx264 -preset ultrafast -loglevel error /out/test.mp4 && \
+		echo Test video created. \
+	)
+
+failover-demo: test-video
+	@go run scripts/failover-demo.go
+
+loadtest:
+	@echo "Running load test..."
+	@where k6 >nul 2>&1 || (echo [ERROR] k6 not found. Install: winget install GrafanaLabs.k6 && exit /b 1)
+	k6 run scripts/loadtest.js
+
 clean:
 	@echo "Cleaning up..."
 	if exist bin rmdir /s /q bin

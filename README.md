@@ -69,7 +69,7 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 | 5 | Redis Streams Publisher, Consumer-Group Worker, PEL-Claiming/Failover | ✔ |
 | 6 | Processing-Logik (Jobs erstellen, Video-Status-Pipeline, simulierte Arbeit) | ✔ |
 | 7 | Video-Transcoding-Logik (ffmpeg-Transcoding, Skalierung, Output nach RustFS) | ✔ |
-| 8 | Failover-Demo unter Last | Offen |
+| 8 | Failover-Demo & Load-Test (Scripts, automatisierte Validierung) | ✔ |
 | 9 | Web UI | Offen |
 
 ## API
@@ -99,9 +99,55 @@ Alle Fehlerantworten folgen einem konsistenten JSON-Format:
 ## Quickstart
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Traefik Dashboard: `http://localhost:8081`
-API: `http://localhost/api/health`
-RustFS Console: `http://localhost:9001`
+| Service | URL |
+|---------|-----|
+| API | http://localhost/api/health |
+| Traefik Dashboard | http://localhost:8081 |
+| RustFS Console | http://localhost:9001 |
+
+## Testing & Validierung
+
+### Unit-Tests
+
+```bash
+go test ./... -v
+```
+
+Testet Auth-Service, Video-Service und Worker-Handler mit Stubs (keine externen Dependencies nötig).
+
+### Failover-Demo
+
+Beweist dass bei Ausfall einer Instanz die andere alle laufenden Jobs übernimmt.
+
+```bash
+make failover-demo
+```
+
+Ablauf: Registriert User, lädt 5 Videos hoch, stoppt `api-1` während der Verarbeitung, beobachtet wie `api-2` die Jobs via Redis PEL-Claiming übernimmt. Erwartet: alle Videos erreichen `status=ready`.
+
+### Load-Test
+
+Misst den Durchsatz der JWT-geschützten API unter Last (erfordert [k6](https://k6.io)).
+
+```bash
+make loadtest
+```
+
+50 virtuelle User feuern 30 Sekunden lang `GET /api/videos` mit JWT-Auth. Thresholds: p95 < 500ms, Error-Rate < 1%.
+
+Custom-Konfiguration:
+
+```bash
+k6 run --vus 100 --duration 60s scripts/loadtest.js
+```
+
+### Test-Video generieren
+
+Erzeugt ein 5-Sekunden Test-Video für die Failover-Demo (einmalig, wird gecached):
+
+```bash
+make test-video
+```
