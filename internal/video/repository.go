@@ -150,3 +150,17 @@ func (r *PostgresRepository) Delete(ctx context.Context, ownerID, videoID string
 	}
 	return nil
 }
+
+// UpdateStatusByID updates the video status without owner-scoping.
+// Used by internal callers (worker) that already verified ownership via the event payload.
+func (r *PostgresRepository) UpdateStatusByID(ctx context.Context, videoID, status string) error {
+	const q = `UPDATE videos SET status = $2, updated_at = NOW() WHERE id = $1::uuid`
+	tag, err := r.db.Exec(ctx, q, videoID, status)
+	if err != nil {
+		return fmt.Errorf("update video status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrVideoNotFound
+	}
+	return nil
+}

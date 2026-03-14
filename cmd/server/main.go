@@ -53,7 +53,13 @@ func main() {
 	videoService := video.NewService(videoRepo, videoStorage, videoEvents, cfg.S3BucketUploads)
 	videoHandler := video.NewHandler(videoService)
 
-	eventHandler := worker.NewEventHandler()
+	jobRepo := worker.NewPostgresJobRepository(deps.DB)
+	objectStore := worker.NewS3ObjectStore(deps.S3)
+	transcoder := worker.NewFFmpegTranscoder()
+	eventHandler := worker.NewEventHandler(
+		jobRepo, videoRepo, objectStore, transcoder,
+		cfg.ConsumerID, cfg.S3BucketUploads, cfg.S3BucketProcessed,
+	)
 	workerCfg := worker.DefaultConfig(cfg.RedisStream, cfg.RedisGroup, cfg.ConsumerID)
 	w := worker.New(deps.Redis, workerCfg, eventHandler.HandleMessage)
 

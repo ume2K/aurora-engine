@@ -17,16 +17,20 @@ RUN esbuild assets/js/main.js --bundle --minify --outfile=public/js/main.js
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server cmd/server/main.go
 
-# --- Stage 2: Runtime ---
-FROM scratch
+# --- Stage 2: Static FFmpeg binary ---
+FROM mwader/static-ffmpeg:7.1 AS ffmpeg
 
+# --- Stage 3: Runtime ---
+FROM gcr.io/distroless/static-debian12
+
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=builder /app/server /server
 COPY --from=builder /app/views /views
 COPY --from=builder /app/public /public
 
-USER 10001
+USER nonroot:nonroot
 
 EXPOSE 8080
 

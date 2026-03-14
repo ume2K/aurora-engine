@@ -11,34 +11,34 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 ## Architektur
 
 ```
-                            ┌──────────┐
-                            │  Client  │
-                            └────┬─────┘
-                                 │ :80
-                           ┌─────▼──────┐
-                           │  Traefik   │
-                           │ Round-Robin │
-                           └──┬──────┬──┘
-              ┌───────────────┘      └───────────────┐
-              ▼                                      ▼
-       ┌─────────────┐                        ┌─────────────┐
-       │    api-1    │                        │    api-2    │
-       │             │                        │             │
-       │ HTTP Server │                        │ HTTP Server │
-       │ Worker Loop │◄───── XCLAIM ────────► │ Worker Loop │
-       │ PEL Claimer │      (Failover)        │ PEL Claimer │
-       └──────┬──────┘                        └──────┬──────┘
-              │                                      │
-    ┌─────────┼──────────────────────────────────────┼─────────┐
-    │         │            aurora-internal            │         │
-    │         ▼                  ▼                    ▼         │
-    │   ┌──────────┐      ┌──────────┐        ┌──────────┐    │
-    │   │ Postgres │      │  Redis   │        │  RustFS  │    │
-    │   │  Users   │      │ Streams  │        │   (S3)   │    │
-    │   │  Videos  │      │  CG/PEL  │        │ Uploads  │    │
-    │   │   Jobs   │      │          │        │ Processed│    │
-    │   └──────────┘      └──────────┘        └──────────┘    │
-    └─────────────────────────────────────────────────────────┘
+                          +------------+
+                          |   Client   |
+                          +-----+------+
+                                | :80
+                         +------v-------+
+                         |   Traefik    |
+                         | Round-Robin  |
+                         +---+------+---+
+              +--------------+      +--------------+
+              v                                    v
+       +-------------+                      +-------------+
+       |    api-1    |                      |    api-2    |
+       |             |                      |             |
+       | HTTP Server |                      | HTTP Server |
+       | Worker Loop |<---- XCLAIM -------->| Worker Loop |
+       | PEL Claimer |     (Failover)       | PEL Claimer |
+       +------+------+                      +------+------+
+              |                                    |
+    +---------+------------------------------------+---------+
+    |         |          aurora-internal           |         |
+    |         v                v                   v         |
+    |   +----------+    +----------+          +----------+   |
+    |   | Postgres |    |  Redis   |          |  RustFS  |   |
+    |   |  Users   |    | Streams  |          |   (S3)   |   |
+    |   |  Videos  |    |  CG/PEL  |          | Uploads  |   |
+    |   |   Jobs   |    |          |          | Processed|   |
+    |   +----------+    +----------+          +----------+   |
+    +--------------------------------------------------------+
 ```
 
 ## Tech Stack
@@ -62,13 +62,13 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 
 | Phase | Thema | Status |
 |-------|-------|--------|
-| 1 | Infrastruktur (Docker Compose, Traefik, Postgres, Redis, RustFS) | Done |
-| 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | Done |
-| 3 | JWT Auth, Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | Done |
-| 4 | Streaming Upload nach RustFS (multipart/form-data), Metadaten in Postgres | Done |
-| 5 | Redis Streams Publisher, Consumer-Group Worker, PEL-Claiming/Failover | Done |
-| 6 | Processing-Logik (Jobs erstellen, Video-Status-Pipeline, simulierte Arbeit) | Offen |
-| 7 | Video-Transcoding-Logik (ffmpeg-Transcoding, Skalierung, Output nach RustFS) | Offen |
+| 1 | Infrastruktur (Docker Compose, Traefik, Postgres, Redis, RustFS) | ✔ |
+| 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | ✔ |
+| 3 | JWT Auth, Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | ✔ |
+| 4 | Streaming Upload nach RustFS (multipart/form-data), Metadaten in Postgres | ✔ |
+| 5 | Redis Streams Publisher, Consumer-Group Worker, PEL-Claiming/Failover | ✔ |
+| 6 | Processing-Logik (Jobs erstellen, Video-Status-Pipeline, simulierte Arbeit) | ✔ |
+| 7 | Video-Transcoding-Logik (ffmpeg-Transcoding, Skalierung, Output nach RustFS) | ✔ |
 | 8 | Failover-Demo unter Last | Offen |
 | 9 | Web UI | Offen |
 
