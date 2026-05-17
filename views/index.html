@@ -2,9 +2,84 @@
 <html lang="en">
 {{ template "head" . }}
 <body>
-    <main class="container">
-        <h1>{{ .Title }}</h1>
-        <p>GoCore Framework – minimal demo.</p>
+    <main class="page">
+        <div class="aurora-bg" aria-hidden="true"></div>
+
+        <header class="hero">
+            <h1>{{ .Title }}</h1>
+            <p>Distributed video pipeline with real failover and live processing status.</p>
+        </header>
+
+        <section id="authSection" class="panel auth-panel" aria-label="Authentication">
+            <div class="panel-head">
+                <h2 id="authTitle">Create your account</h2>
+                <p>Use your API credentials to access upload and live status tracking.</p>
+            </div>
+
+            <div class="auth-grid">
+                <form id="registerForm" class="card" novalidate>
+                    <h3>Register</h3>
+                    <label for="registerEmail">Email</label>
+                    <input id="registerEmail" name="email" type="email" autocomplete="email" required />
+
+                    <label for="registerPassword">Password</label>
+                    <input id="registerPassword" name="password" type="password" autocomplete="new-password" required minlength="8" />
+
+                    <button type="submit">Create account</button>
+                    <p class="auth-switch-text">
+                        Already have an account?
+                        <button id="showLoginLink" class="text-link" type="button">Login</button>
+                    </p>
+                </form>
+
+                <form id="loginForm" class="card hidden" novalidate>
+                    <h3>Login</h3>
+                    <label for="loginEmail">Email</label>
+                    <input id="loginEmail" name="email" type="email" autocomplete="email" required />
+
+                    <label for="loginPassword">Password</label>
+                    <input id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="8" />
+
+                    <button type="submit">Login</button>
+                    <p class="auth-switch-text">
+                        Need an account?
+                        <button id="showRegisterLink" class="text-link" type="button">Register</button>
+                    </p>
+                </form>
+            </div>
+
+            <p id="authMessage" class="message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="appSection" class="panel app-panel hidden" aria-label="Video dashboard">
+            <div class="panel-head panel-head-row">
+                <div>
+                    <h2>Your videos</h2>
+                    <p id="userInfo">Authenticated</p>
+                </div>
+                <button id="logoutButton" class="secondary" type="button">Logout</button>
+            </div>
+
+            <form id="uploadForm" class="upload-form" novalidate>
+                <label for="fileInput">Upload video</label>
+                <div class="upload-row">
+                    <input id="fileInput" name="file" type="file" accept="video/*" required />
+                    <button id="uploadButton" type="submit">Upload</button>
+                </div>
+            </form>
+
+            <p id="appMessage" class="message" role="status" aria-live="polite"></p>
+
+            <div id="videosList" class="videos-list" aria-live="polite"></div>
+        </section>
+
+        <dialog id="videoModal" class="video-modal">
+            <div class="video-modal-head">
+                <h3 id="videoModalTitle">Video playback</h3>
+                <button id="closeVideoModalButton" class="secondary" type="button">Close</button>
+            </div>
+            <video id="videoPlayer" controls playsinline></video>
+        </dialog>
     </main>
 </body>
 </html>

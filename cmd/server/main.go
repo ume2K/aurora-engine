@@ -48,9 +48,9 @@ func main() {
 	authService := auth.NewService(authRepo, jwtManager)
 	authHandler := auth.NewHandler(authService)
 	videoRepo := video.NewPostgresRepository(deps.DB)
-	videoStorage := video.NewS3Storage(deps.S3)
+	videoStorage := video.NewS3Storage(deps.S3, deps.S3Presign)
 	videoEvents := video.NewRedisPublisher(deps.Redis, cfg.RedisStream)
-	videoService := video.NewService(videoRepo, videoStorage, videoEvents, cfg.S3BucketUploads)
+	videoService := video.NewService(videoRepo, videoStorage, videoEvents, cfg.S3BucketUploads, cfg.S3BucketProcessed)
 	videoHandler := video.NewHandler(videoService)
 
 	jobRepo := worker.NewPostgresJobRepository(deps.DB)
@@ -76,7 +76,7 @@ func main() {
 	r.Static("/assets", "./public")
 
 	r.GET("/", func(c *framework.Context) {
-		c.HTML(http.StatusOK, "index.html", PageData{Title: "GoCore"})
+		c.HTML(http.StatusOK, "index.html", PageData{Title: "Aurora Engine"})
 	})
 
 	r.GET("/api/health", func(c *framework.Context) {
@@ -117,6 +117,9 @@ func main() {
 	protected.POST("/videos", func(c *framework.Context) { videoHandler.Create(c) })
 	protected.GET("/videos", func(c *framework.Context) { videoHandler.List(c) })
 	protected.GET("/videos/:id", func(c *framework.Context) { videoHandler.Get(c) })
+	protected.GET("/videos/:id/thumbnail", func(c *framework.Context) { videoHandler.Thumbnail(c) })
+	protected.GET("/videos/:id/download", func(c *framework.Context) { videoHandler.DownloadProcessed(c) })
+	protected.GET("/videos/:id/stream", func(c *framework.Context) { videoHandler.Stream(c) })
 	protected.PUT("/videos/:id", func(c *framework.Context) { videoHandler.Update(c) })
 	protected.DELETE("/videos/:id", func(c *framework.Context) { videoHandler.Delete(c) })
 	protected.POST("/upload", func(c *framework.Context) { videoHandler.Upload(c) })

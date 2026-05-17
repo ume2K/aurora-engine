@@ -6,11 +6,13 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 type videoRepoStub struct {
-	createFn func(ctx context.Context, ownerID string, input CreateInput) (Video, error)
-	listFn   func(ctx context.Context, ownerID string, query ListQuery) ([]Video, error)
+	createFn  func(ctx context.Context, ownerID string, input CreateInput) (Video, error)
+	listFn    func(ctx context.Context, ownerID string, query ListQuery) ([]Video, error)
+	getByIDFn func(ctx context.Context, ownerID, videoID string) (Video, error)
 }
 
 func (s videoRepoStub) Create(ctx context.Context, ownerID string, input CreateInput) (Video, error) {
@@ -22,7 +24,10 @@ func (s videoRepoStub) ListByOwner(ctx context.Context, ownerID string, query Li
 }
 
 func (s videoRepoStub) GetByID(ctx context.Context, ownerID, videoID string) (Video, error) {
-	return Video{}, nil
+	if s.getByIDFn != nil {
+		return s.getByIDFn(ctx, ownerID, videoID)
+	}
+	return Video{ID: videoID, OwnerID: ownerID, Status: "ready"}, nil
 }
 
 func (s videoRepoStub) Update(ctx context.Context, ownerID, videoID string, input UpdateInput) (Video, error) {
@@ -34,8 +39,10 @@ func (s videoRepoStub) Delete(ctx context.Context, ownerID, videoID string) erro
 }
 
 type storageStub struct {
-	putFn    func(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) (UploadResult, error)
-	deleteFn func(ctx context.Context, bucket, key string) error
+	putFn     func(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) (UploadResult, error)
+	deleteFn  func(ctx context.Context, bucket, key string) error
+	getFn     func(ctx context.Context, bucket, key string) (io.ReadCloser, string, error)
+	presignFn func(ctx context.Context, bucket, key string, expires time.Duration) (string, error)
 }
 
 func (s storageStub) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) (UploadResult, error) {
@@ -52,6 +59,20 @@ func (s storageStub) DeleteObject(ctx context.Context, bucket, key string) error
 	return nil
 }
 
+func (s storageStub) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, string, error) {
+	if s.getFn != nil {
+		return s.getFn(ctx, bucket, key)
+	}
+	return io.NopCloser(strings.NewReader("ok")), "application/octet-stream", nil
+}
+
+func (s storageStub) PresignGetObjectURL(ctx context.Context, bucket, key string, expires time.Duration) (string, error) {
+	if s.presignFn != nil {
+		return s.presignFn(ctx, bucket, key, expires)
+	}
+	return "https://example.test/presigned", nil
+}
+
 func defaultRepo() videoRepoStub {
 	return videoRepoStub{
 		createFn: func(ctx context.Context, ownerID string, input CreateInput) (Video, error) {
@@ -60,11 +81,14 @@ func defaultRepo() videoRepoStub {
 		listFn: func(ctx context.Context, ownerID string, query ListQuery) ([]Video, error) {
 			return nil, nil
 		},
+		getByIDFn: func(ctx context.Context, ownerID, videoID string) (Video, error) {
+			return Video{ID: videoID, OwnerID: ownerID, Status: "ready"}, nil
+		},
 	}
 }
 
 func newTestService(repo videoRepoStub, storage storageStub) *Service {
-	return NewService(repo, storage, NoopPublisher{}, "test-bucket")
+	return NewService(repo, storage, NoopPublisher{}, "test-bucket", "test-processed")
 }
 
 func TestCreate_HappyPath(t *testing.T) {
@@ -197,5 +221,60 @@ func TestUpload_DBFailure_CleansUpS3(t *testing.T) {
 	}
 	if deletedKey == "" {
 		t.Fatal("expected S3 cleanup after DB failure")
+	}
+}
+
+func TestGetStreamURL_HappyPath(t *testing.T) {
+	repo := videoRepoStub{
+		createFn: func(ctx context.Context, ownerID string, input CreateInput) (Video, error) { return Video{}, nil },
+		listFn:   func(ctx context.Context, ownerID string, query ListQuery) ([]Video, error) { return nil, nil },
+		getByIDFn: func(ctx context.Context, ownerID, videoID string) (Video, error) {
+			return Video{ID: videoID, OwnerID: ownerID, Status: "ready"}, nil
+		},
+	}
+	storage := storageStub{
+		presignFn: func(ctx context.Context, bucket, key string, expires time.Duration) (string, error) {
+			if bucket != "test-processed" {
+				t.Fatalf("unexpected bucket: %s", bucket)
+			}
+			if key != "vid-ready/720p.mp4" {
+				t.Fatalf("unexpected key: %s", key)
+			}
+			return "https://example.test/stream.mp4?sig=abc", nil
+		},
+	}
+	svc := newTestService(repo, storage)
+
+	url, err := svc.GetStreamURL(context.Background(), "user-1", "vid-ready")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if !strings.Contains(url, "example.test/stream.mp4") {
+		t.Fatalf("unexpected stream url: %s", url)
+	}
+}
+
+func TestGetStreamURL_NotReady(t *testing.T) {
+	repo := videoRepoStub{
+		createFn: func(ctx context.Context, ownerID string, input CreateInput) (Video, error) { return Video{}, nil },
+		listFn:   func(ctx context.Context, ownerID string, query ListQuery) ([]Video, error) { return nil, nil },
+		getByIDFn: func(ctx context.Context, ownerID, videoID string) (Video, error) {
+			return Video{ID: videoID, OwnerID: ownerID, Status: "processing"}, nil
+		},
+	}
+	svc := newTestService(repo, storageStub{})
+
+	_, err := svc.GetStreamURL(context.Background(), "user-1", "vid-processing")
+	if err != ErrVideoNotReady {
+		t.Fatalf("expected ErrVideoNotReady, got: %v", err)
+	}
+}
+
+func TestGetStreamURL_InvalidInput(t *testing.T) {
+	svc := newTestService(defaultRepo(), storageStub{})
+
+	_, err := svc.GetStreamURL(context.Background(), "user-1", "   ")
+	if err != ErrInvalidInput {
+		t.Fatalf("expected ErrInvalidInput, got: %v", err)
 	}
 }

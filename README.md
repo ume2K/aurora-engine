@@ -44,9 +44,9 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 ## Tech Stack
 
 * **Backend:** Go – 2 identische Instanzen für Hochverfügbarkeit
-* **Gateway:** Traefik v3 – verteilt Requests gleichmässig und erkennt ausgefallene Container
-* **Database:** PostgreSQL 16 – User, Video-Metadaten und Processing Jobs
-* **Message Broker:** Redis Streams – Consumer Groups (CG) mit Pending Entries List (PEL) für Failover
+* **Gateway:** Traefik v3.6 – verteilt Requests gleichmässig und erkennt ausgefallene Container
+* **Database:** PostgreSQL 17.9 – User, Video-Metadaten und Processing Jobs
+* **Message Broker:** Redis 8.2 – Streams mit Consumer Groups (CG) und Pending Entries List (PEL) für Failover
 * **Storage:** RustFS – S3-kompatibler Objektspeicher, angesprochen via minio-go Client
 * **Frontend:** Plain HTML
 * **Auth:** JWT Bearer Tokens
@@ -70,7 +70,7 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 | 6 | Processing-Logik (Jobs erstellen, Video-Status-Pipeline, simulierte Arbeit) | ✔ |
 | 7 | Video-Transcoding-Logik (ffmpeg-Transcoding, Skalierung, Output nach RustFS) | ✔ |
 | 8 | Failover-Demo & Load-Test (Scripts, automatisierte Validierung) | ✔ |
-| 9 | Web UI | Offen |
+| 9 | Web UI | ✔ |
 
 ## API
 

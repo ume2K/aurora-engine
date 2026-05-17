@@ -13,10 +13,15 @@ import (
 )
 
 var (
-	ErrInvalidInput  = errors.New("invalid input")
-	ErrVideoNotFound = errors.New("video not found")
-	ErrFileTooLarge  = errors.New("file exceeds maximum allowed size")
+	ErrInvalidInput           = errors.New("invalid input")
+	ErrVideoNotFound          = errors.New("video not found")
+	ErrFileTooLarge           = errors.New("file exceeds maximum allowed size")
+	ErrVideoNotReady          = errors.New("video not ready")
+	ErrProcessedAssetNotFound = errors.New("processed asset not found")
+	ErrStreamURLUnavailable   = errors.New("stream url unavailable")
 )
+
+const streamURLTTL = 15 * time.Minute
 
 var allowedStatuses = map[string]struct{}{
 	"uploaded":   {},
@@ -26,18 +31,20 @@ var allowedStatuses = map[string]struct{}{
 }
 
 type Service struct {
-	repo    Repository
-	storage ObjectStorage
-	events  EventPublisher
-	bucket  string
+	repo            Repository
+	storage         ObjectStorage
+	events          EventPublisher
+	bucketUploads   string
+	bucketProcessed string
 }
 
-func NewService(repo Repository, storage ObjectStorage, events EventPublisher, bucket string) *Service {
+func NewService(repo Repository, storage ObjectStorage, events EventPublisher, bucketUploads, bucketProcessed string) *Service {
 	return &Service{
-		repo:    repo,
-		storage: storage,
-		events:  events,
-		bucket:  bucket,
+		repo:            repo,
+		storage:         storage,
+		events:          events,
+		bucketUploads:   bucketUploads,
+		bucketProcessed: bucketProcessed,
 	}
 }
 
@@ -54,7 +61,7 @@ func (s *Service) Upload(ctx context.Context, ownerID string, file io.Reader, fi
 
 	objectKey := fmt.Sprintf("%s/%s/%s", ownerID, uuid.New().String(), filename)
 
-	info, err := s.storage.PutObject(ctx, s.bucket, objectKey, file, -1, contentType)
+	info, err := s.storage.PutObject(ctx, s.bucketUploads, objectKey, file, -1, contentType)
 	if err != nil {
 		return Video{}, fmt.Errorf("upload to storage: %w", err)
 	}
@@ -70,7 +77,7 @@ func (s *Service) Upload(ctx context.Context, ownerID string, file io.Reader, fi
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if delErr := s.storage.DeleteObject(cleanupCtx, s.bucket, objectKey); delErr != nil {
+		if delErr := s.storage.DeleteObject(cleanupCtx, s.bucketUploads, objectKey); delErr != nil {
 			log.Printf("cleanup s3 object %q failed: %v", objectKey, delErr)
 		}
 		return Video{}, fmt.Errorf("save video metadata: %w", err)
@@ -174,4 +181,82 @@ func (s *Service) Delete(ctx context.Context, ownerID, videoID string) error {
 		return ErrInvalidInput
 	}
 	return s.repo.Delete(ctx, ownerID, videoID)
+}
+
+func (s *Service) OpenThumbnail(ctx context.Context, ownerID, videoID string) (io.ReadCloser, string, error) {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil, "", ErrInvalidInput
+	}
+
+	v, err := s.repo.GetByID(ctx, ownerID, videoID)
+	if err != nil {
+		return nil, "", err
+	}
+	if v.Status != "ready" {
+		return nil, "", ErrVideoNotReady
+	}
+
+	key := fmt.Sprintf("%s/thumb.jpg", videoID)
+	reader, contentType, err := s.storage.GetObject(ctx, s.bucketProcessed, key)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "no such key") {
+			return nil, "", ErrProcessedAssetNotFound
+		}
+		return nil, "", fmt.Errorf("open thumbnail: %w", err)
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "image/jpeg"
+	}
+	return reader, contentType, nil
+}
+
+func (s *Service) OpenProcessedVideo(ctx context.Context, ownerID, videoID string) (io.ReadCloser, string, error) {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil, "", ErrInvalidInput
+	}
+
+	v, err := s.repo.GetByID(ctx, ownerID, videoID)
+	if err != nil {
+		return nil, "", err
+	}
+	if v.Status != "ready" {
+		return nil, "", ErrVideoNotReady
+	}
+
+	key := fmt.Sprintf("%s/720p.mp4", videoID)
+	reader, contentType, err := s.storage.GetObject(ctx, s.bucketProcessed, key)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "no such key") {
+			return nil, "", ErrProcessedAssetNotFound
+		}
+		return nil, "", fmt.Errorf("open processed video: %w", err)
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "video/mp4"
+	}
+	return reader, contentType, nil
+}
+
+func (s *Service) GetStreamURL(ctx context.Context, ownerID, videoID string) (string, error) {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return "", ErrInvalidInput
+	}
+
+	v, err := s.repo.GetByID(ctx, ownerID, videoID)
+	if err != nil {
+		return "", err
+	}
+	if v.Status != "ready" {
+		return "", ErrVideoNotReady
+	}
+
+	key := fmt.Sprintf("%s/720p.mp4", videoID)
+	streamURL, err := s.storage.PresignGetObjectURL(ctx, s.bucketProcessed, key, streamURLTTL)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrStreamURLUnavailable, err)
+	}
+	return streamURL, nil
 }

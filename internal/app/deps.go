@@ -14,9 +14,10 @@ import (
 )
 
 type Deps struct {
-	DB    *pgxpool.Pool
-	Redis *redis.Client
-	S3    *minio.Client
+	DB        *pgxpool.Pool
+	Redis     *redis.Client
+	S3        *minio.Client
+	S3Presign *minio.Client
 }
 
 func NewDeps(ctx context.Context, cfg config.Config) (*Deps, error) {
@@ -67,10 +68,25 @@ func NewDeps(ctx context.Context, cfg config.Config) (*Deps, error) {
 		return nil, err
 	}
 
+	presignClient := s3Client
+	if cfg.S3PublicEndpoint != cfg.S3Endpoint {
+		presignClient, err = minio.New(cfg.S3PublicEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(cfg.S3AccessKey, cfg.S3SecretKey, ""),
+			Secure: cfg.S3UseSSL,
+			Region: cfg.S3Region,
+		})
+		if err != nil {
+			db.Close()
+			_ = redisClient.Close()
+			return nil, fmt.Errorf("create s3 presign client: %w", err)
+		}
+	}
+
 	return &Deps{
-		DB:    db,
-		Redis: redisClient,
-		S3:    s3Client,
+		DB:        db,
+		Redis:     redisClient,
+		S3:        s3Client,
+		S3Presign: presignClient,
 	}, nil
 }
 

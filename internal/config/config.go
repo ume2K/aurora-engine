@@ -24,6 +24,7 @@ type Config struct {
 	ConsumerID    string
 
 	S3Endpoint        string
+	S3PublicEndpoint  string
 	S3Region          string
 	S3AccessKey       string
 	S3SecretKey       string
@@ -43,6 +44,7 @@ func Load() (Config, error) {
 		RedisGroup:        getEnv("REDIS_GROUP", "media-workers"),
 		ConsumerID:        getEnv("CONSUMER_ID", defaultHostname()),
 		S3Endpoint:        getEnv("S3_ENDPOINT", "localhost:9000"),
+		S3PublicEndpoint:  getEnv("S3_PUBLIC_ENDPOINT", getEnv("S3_ENDPOINT", "localhost:9000")),
 		S3Region:          getEnv("S3_REGION", "eu-central-1"),
 		S3AccessKey:       getEnv("S3_ACCESS_KEY", "rustfsadmin"),
 		S3SecretKey:       getEnv("S3_SECRET_KEY", "rustfsadmin"),

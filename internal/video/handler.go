@@ -4,6 +4,7 @@ import (
 	"errors"
 	"gocore/pkg/framework"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -211,6 +212,102 @@ func (h *Handler) Upload(c *framework.Context) {
 		c.JSONSafe(http.StatusCreated, map[string]any{"video": v})
 		return
 	}
+}
+
+func (h *Handler) Thumbnail(c *framework.Context) {
+	ownerID, ok := framework.AuthUserIDFromContext(c.R.Context())
+	if !ok {
+		c.ErrorJSON(http.StatusUnauthorized, "missing auth context")
+		return
+	}
+
+	videoID := c.Param("id")
+	reader, contentType, err := h.service.OpenThumbnail(c.R.Context(), ownerID, videoID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidInput):
+			c.ErrorJSON(http.StatusBadRequest, "invalid video id")
+		case errors.Is(err, ErrVideoNotFound):
+			c.ErrorJSON(http.StatusNotFound, "video not found")
+		case errors.Is(err, ErrVideoNotReady):
+			c.ErrorJSON(http.StatusConflict, "video is not ready yet")
+		case errors.Is(err, ErrProcessedAssetNotFound):
+			c.ErrorJSON(http.StatusNotFound, "thumbnail not found")
+		default:
+			c.ErrorJSON(http.StatusInternalServerError, "load thumbnail failed")
+		}
+		return
+	}
+	defer reader.Close()
+
+	c.W.Header().Set("Content-Type", contentType)
+	c.W.Header().Set("Cache-Control", "private, max-age=10")
+	c.W.WriteHeader(http.StatusOK)
+	if _, copyErr := io.Copy(c.W, reader); copyErr != nil {
+		log.Printf("write thumbnail failed: %v", copyErr)
+	}
+}
+
+func (h *Handler) DownloadProcessed(c *framework.Context) {
+	ownerID, ok := framework.AuthUserIDFromContext(c.R.Context())
+	if !ok {
+		c.ErrorJSON(http.StatusUnauthorized, "missing auth context")
+		return
+	}
+
+	videoID := c.Param("id")
+	reader, contentType, err := h.service.OpenProcessedVideo(c.R.Context(), ownerID, videoID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidInput):
+			c.ErrorJSON(http.StatusBadRequest, "invalid video id")
+		case errors.Is(err, ErrVideoNotFound):
+			c.ErrorJSON(http.StatusNotFound, "video not found")
+		case errors.Is(err, ErrVideoNotReady):
+			c.ErrorJSON(http.StatusConflict, "video is not ready yet")
+		case errors.Is(err, ErrProcessedAssetNotFound):
+			c.ErrorJSON(http.StatusNotFound, "processed video not found")
+		default:
+			c.ErrorJSON(http.StatusInternalServerError, "load processed video failed")
+		}
+		return
+	}
+	defer reader.Close()
+
+	c.W.Header().Set("Content-Type", contentType)
+	c.W.Header().Set("Content-Disposition", `attachment; filename="processed-720p.mp4"`)
+	c.W.WriteHeader(http.StatusOK)
+	if _, copyErr := io.Copy(c.W, reader); copyErr != nil {
+		log.Printf("write processed video failed: %v", copyErr)
+	}
+}
+
+func (h *Handler) Stream(c *framework.Context) {
+	ownerID, ok := framework.AuthUserIDFromContext(c.R.Context())
+	if !ok {
+		c.ErrorJSON(http.StatusUnauthorized, "missing auth context")
+		return
+	}
+
+	videoID := c.Param("id")
+	streamURL, err := h.service.GetStreamURL(c.R.Context(), ownerID, videoID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidInput):
+			c.ErrorJSON(http.StatusBadRequest, "invalid video id")
+		case errors.Is(err, ErrVideoNotFound):
+			c.ErrorJSON(http.StatusNotFound, "video not found")
+		case errors.Is(err, ErrVideoNotReady):
+			c.ErrorJSON(http.StatusConflict, "video is not ready yet")
+		case errors.Is(err, ErrStreamURLUnavailable):
+			c.ErrorJSON(http.StatusInternalServerError, "stream url unavailable")
+		default:
+			c.ErrorJSON(http.StatusInternalServerError, "stream setup failed")
+		}
+		return
+	}
+
+	c.JSONSafe(http.StatusOK, map[string]string{"stream_url": streamURL})
 }
 
 func parsePositiveInt(raw string, fallback int) (int, error) {
