@@ -61,14 +61,14 @@ services:
     container_name: aurora-api-2
 
   postgres:
-    image: postgres:17.9-alpine
+    image: postgres:18.4-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: aurora
       POSTGRES_USER: aurora
       POSTGRES_PASSWORD: aurora
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./docker/init/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aurora -d aurora"]

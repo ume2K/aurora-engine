@@ -130,18 +130,19 @@ Ablauf: Registriert User, lädt 5 Videos hoch, stoppt `api-1` während der Verar
 
 ### Load-Test
 
-Misst den Durchsatz der JWT-geschützten API unter Last (erfordert [k6](https://k6.io)).
+Misst den Durchsatz der JWT-geschützten API unter Last mit [hey](https://github.com/rakyll/hey).
 
 ```bash
+go install github.com/rakyll/hey@latest
 make loadtest
 ```
 
-50 virtuelle User feuern 30 Sekunden lang `GET /api/videos` mit JWT-Auth. Thresholds: p95 < 500ms, Error-Rate < 1%.
+Das Script registriert automatisch einen Test-User, holt ein JWT und feuert 30 Sekunden lang `GET /api/videos` mit 50 Concurrent Workers gegen den JWT-geschützten Endpunkt (DB-Read).
 
 Custom-Konfiguration:
 
 ```bash
-k6 run --vus 100 --duration 60s scripts/loadtest.js
+go run scripts/loadtest.go -c 100 -z 60s
 ```
 
 ### Test-Video generieren

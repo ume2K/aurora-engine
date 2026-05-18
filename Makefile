@@ -46,8 +46,8 @@ failover-demo: test-video
 
 loadtest:
 	@echo "Running load test..."
-	@where k6 >nul 2>&1 || (echo [ERROR] k6 not found. Install: winget install GrafanaLabs.k6 && exit /b 1)
-	k6 run scripts/loadtest.js
+	@where hey >nul 2>&1 || (echo [ERROR] hey not found. Install: go install github.com/rakyll/hey@latest && exit /b 1)
+	go run scripts/loadtest.go
 
 clean:
 	@echo "Cleaning up..."
