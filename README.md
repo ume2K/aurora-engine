@@ -32,24 +32,26 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
     +---------+------------------------------------+---------+
     |         |          aurora-internal           |         |
     |         v                v                   v         |
-    |   +----------+    +----------+          +----------+   |
-    |   | Postgres |    |  Redis   |          |  RustFS  |   |
-    |   |  Users   |    | Streams  |          |   (S3)   |   |
-    |   |  Videos  |    |  CG/PEL  |          | Uploads  |   |
-    |   |   Jobs   |    |          |          | Processed|   |
-    |   +----------+    +----------+          +----------+   |
+    |   +----------+       +----------+       +----------+   |
+    |   | Postgres |       |  Redis   |       |  RustFS  |   |
+    |   |  Users   |       | Streams  |       |   (S3)   |   |
+    |   |  Videos  |       |  CG/PEL  |       | Uploads  |   |
+    |   |   Jobs   |       |          |       | Processed|   |
+    |   | Refresh  |       |          |       |          |   |
+    |   |  Tokens  |       |          |       |          |   |
+    |   +----------+       +----------+       +----------+   |
     +--------------------------------------------------------+
 ```
 
 ## Tech Stack
 
-* **Backend:** Go – 2 identische Instanzen für Hochverfügbarkeit
+* **Backend:** Go 1.25 – 2 identische Instanzen für Hochverfügbarkeit
 * **Gateway:** Traefik v3.6 – verteilt Requests gleichmässig und erkennt ausgefallene Container
-* **Database:** PostgreSQL 17.9 – User, Video-Metadaten und Processing Jobs
+* **Database:** PostgreSQL 18.4 – User, Video-Metadaten, Processing Jobs und Refresh Tokens
 * **Message Broker:** Redis 8.2 – Streams mit Consumer Groups (CG) und Pending Entries List (PEL) für Failover
 * **Storage:** RustFS – S3-kompatibler Objektspeicher, angesprochen via minio-go Client
 * **Frontend:** Plain HTML
-* **Auth:** JWT Bearer Tokens
+* **Auth:** JWT Bearer Tokens (kurzlebige Access Tokens, 15 Min) + Refresh Tokens (7 Tage, Rotation bei jedem Refresh)
 
 ## Das Failover-Szenario
 
@@ -64,7 +66,7 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 |-------|-------|--------|
 | 1 | Infrastruktur (Docker Compose, Traefik, Postgres, Redis, RustFS) | ✔ |
 | 2 | Go-App Grundgerüst (Config, DI, Health-Endpunkte, Graceful Shutdown) | ✔ |
-| 3 | JWT Auth, Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | ✔ |
+| 3 | JWT Auth (Access + Refresh Tokens), Video-Metadaten-CRUD, Pagination/Filter, Unit-Tests | ✔ |
 | 4 | Streaming Upload nach RustFS (multipart/form-data), Metadaten in Postgres | ✔ |
 | 5 | Redis Streams Publisher, Consumer-Group Worker, PEL-Claiming/Failover | ✔ |
 | 6 | Processing-Logik (Jobs erstellen, Video-Status-Pipeline, simulierte Arbeit) | ✔ |
@@ -75,8 +77,10 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 ## API
 
 **Auth**
-- `POST /api/auth/register`
-- `POST /api/auth/login`
+- `POST /api/auth/register` – Gibt `token`, `refresh_token` und `expires_in` zurück
+- `POST /api/auth/login` – Gibt `token`, `refresh_token` und `expires_in` zurück
+- `POST /api/auth/refresh` – Konsumiert Refresh Token, gibt neues Token-Paar zurück (Rotation)
+- `POST /api/auth/logout` – Invalidiert Refresh Token (Bearer Token erforderlich)
 - `GET /api/users/me` (Bearer Token erforderlich)
 
 **Videos**
@@ -84,12 +88,17 @@ Das Ziel: Ein System, das nicht nur unter Last performt, sondern bei dem ein Nod
 - `POST /api/videos` – Metadaten manuell anlegen
 - `GET /api/videos` – Liste mit Pagination (`page`, `limit`), Filter (`status`, `q`)
 - `GET /api/videos/:id`
+- `GET /api/videos/:id/thumbnail`
+- `GET /api/videos/:id/download`
+- `GET /api/videos/:id/stream`
 - `PUT /api/videos/:id`
 - `DELETE /api/videos/:id`
 
 **System**
 - `GET /api/health`
 - `GET /api/health/deps` – Postgres, Redis, RustFS Status
+
+Alle Endpunkte ab `/api/videos` sowie `/api/users/me` und `/api/auth/logout` erfordern einen gültigen Bearer Token im `Authorization`-Header.
 
 Alle Fehlerantworten folgen einem konsistenten JSON-Format:
 ```json
