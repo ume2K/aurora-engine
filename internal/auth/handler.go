@@ -21,7 +21,7 @@ func (h *Handler) Register(c *framework.Context) {
 		return
 	}
 
-	user, token, err := h.service.Register(c.R.Context(), input)
+	user, pair, err := h.service.Register(c.R.Context(), input)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidInput):
@@ -35,8 +35,10 @@ func (h *Handler) Register(c *framework.Context) {
 	}
 
 	c.JSONSafe(http.StatusCreated, map[string]any{
-		"user":  user,
-		"token": token,
+		"user":          user,
+		"token":         pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"expires_in":    pair.ExpiresIn,
 	})
 }
 
@@ -47,7 +49,7 @@ func (h *Handler) Login(c *framework.Context) {
 		return
 	}
 
-	user, token, err := h.service.Login(c.R.Context(), input)
+	user, pair, err := h.service.Login(c.R.Context(), input)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidInput):
@@ -61,9 +63,50 @@ func (h *Handler) Login(c *framework.Context) {
 	}
 
 	c.JSONSafe(http.StatusOK, map[string]any{
-		"user":  user,
-		"token": token,
+		"user":          user,
+		"token":         pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"expires_in":    pair.ExpiresIn,
 	})
+}
+
+func (h *Handler) Refresh(c *framework.Context) {
+	var input RefreshInput
+	if err := c.BindJSONStrict(&input); err != nil {
+		c.ErrorJSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	pair, err := h.service.RefreshTokens(c.R.Context(), input.RefreshToken)
+	if err != nil {
+		if errors.Is(err, ErrInvalidToken) {
+			c.ErrorJSON(http.StatusUnauthorized, "invalid or expired refresh token")
+			return
+		}
+		c.ErrorJSON(http.StatusInternalServerError, "refresh failed")
+		return
+	}
+
+	c.JSONSafe(http.StatusOK, map[string]any{
+		"token":         pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"expires_in":    pair.ExpiresIn,
+	})
+}
+
+func (h *Handler) Logout(c *framework.Context) {
+	var input RefreshInput
+	if err := c.BindJSONStrict(&input); err != nil {
+		c.ErrorJSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.service.Logout(c.R.Context(), input.RefreshToken); err != nil {
+		c.ErrorJSON(http.StatusInternalServerError, "logout failed")
+		return
+	}
+
+	c.W.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) Me(c *framework.Context) {

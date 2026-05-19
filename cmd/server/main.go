@@ -45,7 +45,7 @@ func main() {
 
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiresIn)
 	authRepo := auth.NewPostgresRepository(deps.DB)
-	authService := auth.NewService(authRepo, jwtManager)
+	authService := auth.NewService(authRepo, jwtManager, cfg.RefreshTokenTTL)
 	authHandler := auth.NewHandler(authService)
 	videoRepo := video.NewPostgresRepository(deps.DB)
 	videoStorage := video.NewS3Storage(deps.S3, deps.S3Presign)
@@ -110,9 +110,11 @@ func main() {
 	api := r.Group("/api")
 	api.POST("/auth/register", func(c *framework.Context) { authHandler.Register(c) })
 	api.POST("/auth/login", func(c *framework.Context) { authHandler.Login(c) })
+	api.POST("/auth/refresh", func(c *framework.Context) { authHandler.Refresh(c) })
 
 	protected := r.Group("/api")
 	protected.Use(framework.RequireBearerAuth(auth.FrameworkTokenVerifier(jwtManager)))
+	protected.POST("/auth/logout", func(c *framework.Context) { authHandler.Logout(c) })
 	protected.GET("/users/me", func(c *framework.Context) { authHandler.Me(c) })
 	protected.POST("/videos", func(c *framework.Context) { videoHandler.Create(c) })
 	protected.GET("/videos", func(c *framework.Context) { videoHandler.List(c) })
